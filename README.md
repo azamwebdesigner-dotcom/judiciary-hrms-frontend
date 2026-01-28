@@ -38,6 +38,7 @@ This project manages employee records, postings, employment history, and validat
 - VS Code
 
 ---
+⚠️ Backend code is intentionally private for security and ownership reasons.
 
 ## 📂 Project Structure
 
