@@ -1,0 +1,304 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft, Shield, TrendingUp, Wallet, FileText,
+  CheckCircle, AlertCircle, Trash2, Plus, Download, Clock, Target
+} from 'lucide-react';
+import { api } from '../services/api';
+import { Employee } from '../types';
+import { financialRecordsService, ACRStatus, AssetsStatus, FBRStatus, GPFundData } from '../services/financialRecordsService';
+
+type Tab = 'ACR' | 'Assets' | 'GPFund' | 'FBR';
+
+// Progress Circle Component
+interface ProgressCircleProps {
+  percentage: number;
+  missing: number;
+  total: number;
+  label: string;
+  color: 'blue' | 'green' | 'purple' | 'orange';
+}
+
+const ProgressCircle: React.FC<ProgressCircleProps> = ({ percentage, missing, total, label, color }) => {
+  const colors = {
+    blue: 'from-blue-400 to-blue-600',
+    green: 'from-green-400 to-green-600',
+    purple: 'from-purple-400 to-purple-600',
+    orange: 'from-orange-400 to-orange-600',
+  };
+
+  const circumference = 2 * Math.PI * 45;
+  const offset = circumference - (percentage / 100) * circumference;
+
+  return (
+    <div className="flex flex-col items-center justify-center">
+      <div className="relative w-36 h-36 mb-4">
+        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
+          <circle
+            cx="60"
+            cy="60"
+            r="45"
+            fill="none"
+            stroke="#e5e7eb"
+            strokeWidth="8"
+          />
+          <circle
+            cx="60"
+            cy="60"
+            r="45"
+            fill="none"
+            stroke="url(#gradient)"
+            strokeWidth="8"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            className="transition-all duration-500"
+          />
+          <defs>
+            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={color === 'blue' ? '#60a5fa' : color === 'green' ? '#4ade80' : color === 'purple' ? '#a78bfa' : '#fb923c'} />
+              <stop offset="100%" stopColor={color === 'blue' ? '#2563eb' : color === 'green' ? '#16a34a' : color === 'purple' ? '#7c3aed' : '#ea580c'} />
+            </linearGradient>
+          </defs>
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <p className="text-3xl font-bold text-gray-800">{Math.round(percentage)}%</p>
+          <p className="text-xs text-gray-500 text-center mt-1">{total} expected</p>
+        </div>
+      </div>
+      <h3 className="text-lg font-semibold text-gray-700">{label}</h3>
+      <p className="text-sm text-red-600 font-medium mt-1">
+        {missing} {missing === 1 ? 'Missing' : 'Missing'}
+      </p>
+    </div>
+  );
+};
+
+// Form Modal Component
+interface FormModalProps {
+  isOpen: boolean;
+  title: string;
+  onClose: () => void;
+  onSubmit: (data: any) => void;
+  children: React.ReactNode;
+  loading?: boolean;
+}
+
+const FormModal: React.FC<FormModalProps> = ({ isOpen, title, onClose, onSubmit, children, loading = false }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg max-w-md w-full max-h-96 overflow-y-auto">
+        <div className="flex justify-between items-center p-6 border-b">
+          <h2 className="text-xl font-bold">{title}</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">✕</button>
+        </div>
+        <form onSubmit={(e) => { e.preventDefault(); onSubmit(new FormData(e.currentTarget)); }} className="p-6 space-y-4">
+          {children}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-judiciary-600 text-white py-2 rounded-lg hover:bg-judiciary-700 disabled:opacity-50"
+          >
+            {loading ? 'Submitting...' : 'Submit'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const FinancialRecords: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+
+  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('ACR');
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [acrForm, setAcrForm] = useState<Partial<ACR>>({
+    year: new Date().getFullYear(),
+    periodFrom: '',
+    periodTo: '',
+    score: 'Very Good',
+    status: 'Countersigned',
+    title: ''
+  });
+
+  const [assetForm, setAssetForm] = useState<Partial<AssetDeclaration>>({
+    financialYear: '',
+    submissionDate: new Date().toISOString().split('T')[0],
+    status: 'Submitted'
+  });
+
+  const [gpForm, setGpForm] = useState<Partial<GPFundRecord>>({
+    description: '',
+    amount: 0,
+    monthlyInstallment: 0,
+    remainingAmount: 0,
+    date: new Date().toISOString().split('T')[0],
+    type: 'Advance'
+  });
+
+  const [fbrForm, setFbrForm] = useState<Partial<FBRRecord>>({
+    taxYear: new Date().getFullYear(),
+    filerStatus: 'Active',
+    submissionDate: new Date().toISOString().split('T')[0]
+  });
+
+  useEffect(() => {
+    if (!id) return;
+    api.getEmployeeById(id)
+      .then(setEmployee)
+      .catch(() => navigate('/employees'));
+  }, [id, navigate]);
+
+  const notify = (type: 'success' | 'error', text: string) => {
+    setMessage({ type, text });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
+  const normalizeEmployee = (emp: Employee): Employee => ({
+    ...emp,
+    acrs: emp.acrs ?? [],
+    assets: emp.assets ?? [],
+    gpFundHistory: emp.gpFundHistory ?? [],
+    fbrRecords: emp.fbrRecords ?? [],
+    gpFundSummary: emp.gpFundSummary ?? EMPTY_GPFUND
+  });
+
+  const saveUpdates = async (updated: Employee, msg: string) => {
+    try {
+      await api.updateEmployee(updated);
+      setEmployee(updated);
+      notify('success', msg);
+    } catch {
+      notify('error', 'Failed to save changes');
+    }
+  };
+
+  const deleteRecord = (type: Tab, recordId: string) => {
+    if (!employee) return;
+
+    let updated = normalizeEmployee(employee);
+
+    if (type === 'ACR')
+      updated.acrs = updated.acrs.filter(x => x.id !== recordId);
+
+    if (type === 'Assets')
+      updated.assets = updated.assets.filter(x => x.id !== recordId);
+
+    if (type === 'GPFund') {
+      const deleted = updated.gpFundHistory.find(x => x.id === recordId);
+      updated.gpFundHistory = updated.gpFundHistory.filter(x => x.id !== recordId);
+
+      if (deleted?.type === 'Advance') {
+        updated.gpFundSummary.totalAvailed -= deleted.amount;
+        updated.gpFundSummary.timesAvailed -= 1;
+      }
+    }
+
+    if (type === 'FBR')
+      updated.fbrRecords = updated.fbrRecords.filter(x => x.id !== recordId);
+
+    saveUpdates(updated, 'Record Deleted');
+  };
+
+  if (!employee) return null;
+  const safeEmployee = normalizeEmployee(employee);
+
+  return (
+    <div className="max-w-6xl mx-auto pb-20">
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={() => navigate('/employees')} className="p-2 rounded-full hover:bg-gray-200">
+          <ArrowLeft size={22} />
+        </button>
+        <div>
+          <h2 className="text-3xl font-bold">Financial & Service Records</h2>
+          <p className="text-gray-500 text-sm">
+            Manage records for <span className="font-semibold">{employee.fullName}</span>
+          </p>
+        </div>
+      </div>
+
+      {message && (
+        <div className={`fixed top-6 right-6 px-6 py-3 rounded-xl shadow-xl text-white ${
+          message.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+        }`}>
+          {message.text}
+        </div>
+      )}
+
+      {/* --- TABS --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="space-y-2">
+          {(['ACR', 'Assets', 'GPFund', 'FBR'] as Tab[]).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`w-full px-4 py-3 rounded-lg text-left font-medium ${
+                activeTab === tab ? 'bg-judiciary-600 text-white' : 'bg-white border'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        <div className="lg:col-span-3 space-y-6">
+
+          {activeTab === 'GPFund' && (
+            <div className="bg-white p-6 rounded-xl border">
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="bg-green-50 p-4 rounded text-center">
+                  <p className="text-xs font-bold">Total Availed</p>
+                  <h3 className="text-2xl font-bold">
+                    {safeEmployee.gpFundSummary.totalAvailed.toLocaleString()}
+                  </h3>
+                </div>
+                <div className="bg-gray-50 p-4 rounded text-center">
+                  <p className="text-xs font-bold">Times Availed</p>
+                  <h3 className="text-2xl font-bold">
+                    {safeEmployee.gpFundSummary.timesAvailed}
+                  </h3>
+                </div>
+                <div className="bg-blue-50 p-4 rounded text-center">
+                  <p className="text-xs font-bold">Current Balance</p>
+                  <h3 className="text-2xl font-bold">
+                    {safeEmployee.gpFundSummary.currentBalance.toLocaleString()}
+                  </h3>
+                </div>
+              </div>
+
+              {safeEmployee.gpFundHistory.map(gp => (
+                <div key={gp.id} className="flex justify-between border-b py-2">
+                  <span>{gp.description}</span>
+                  <button onClick={() => deleteRecord('GPFund', gp.id)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeTab === 'FBR' && (
+            <div className="bg-white p-6 rounded-xl border">
+              {safeEmployee.fbrRecords.map(fbr => (
+                <div key={fbr.id} className="flex justify-between p-3 border-b">
+                  <span>Tax Year {fbr.taxYear}</span>
+                  <button onClick={() => deleteRecord('FBR', fbr.id)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default FinancialRecords;
