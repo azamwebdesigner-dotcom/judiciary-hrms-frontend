@@ -42,7 +42,6 @@ This system manages employee records, postings, employment history, leave record
 - VS Code
 
 ---
-
 ---
 
 ## 📸 Screenshots
@@ -93,7 +92,7 @@ This system manages employee records, postings, employment history, leave record
 ---
 
 ### ⚖️ Disciplinary Action UI
-![Disciplinary Action](screenshots/disciplinary-action-ui.png)
+![Disciplinary Action UI](screenshots/disciplinary-action-ui.png)
 
 ---
 
@@ -136,6 +135,4 @@ This system manages employee records, postings, employment history, leave record
 ![Transfer Employee UI](screenshots/transfer-employee-ui.png)
 
 ---
-
-
 
